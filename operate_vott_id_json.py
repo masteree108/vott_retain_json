@@ -1,17 +1,6 @@
 import os
 import json
-import enum
 import log as PYM
-
-class BBOX_ITEM(enum.Enum):
-    height = 0
-    width = 1
-    left = 2
-    top = 3
-
-class VIDEO_SIZE(enum.Enum):
-    W = 0
-    H = 1
 
 class operate_vott_id_json():
 # private
@@ -44,12 +33,8 @@ class operate_vott_id_json():
                 self.__asset_format = jf['asset']['format']
                 self.__asset_name = jf['asset']['name']
                 self.__asset_path = jf['asset']['path']
-                #self.__video_size[VIDEO_SIZE.W.value] = jf['asset']['size']['width']
-                #self.__video_size[VIDEO_SIZE.H.value] = jf['asset']['size']['height']
                 self.__timestamp = jf['asset']['timestamp']
-                #self.__parent_id = jf['asset']['parent']['id']
                 self.__parent_name = jf['asset']['parent']['name']
-                #self.__parent_path = jf['asset']['parent']['path']
 
                 # using length of region to judge how many objects in this frame
                 self.__object_num = len(jf['regions'])

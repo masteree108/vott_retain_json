@@ -79,14 +79,13 @@ class tool_display():
             #self.__root.state('zoomed')
             #self.__root.state('normal')
 
-        self.__root.title("識別非此資料夾之json檔案"+ "        " + self.__version)
+        self.__root.title("識別非此資料夾之json檔案"+ "__" + self.__version)
         self.figure, self.ax = plt.subplots(1, 1, figsize=(16, 8))
         self.pym.PY_LOG(False, 'D', self.__log_name, 'self.figure:' + '%s' % self.figure)
 
         #放置標籤
         self.label_state = Tk.Label(self.__root,text = 'system state', image = None, font = self.__set_font)   #創建一個標籤
         self.label_state.pack()
-
 
         self.__init_buttons()
         self.__root.protocol("WM_DELETE_WINDOW", self.system_quit)
@@ -97,14 +96,26 @@ class tool_display():
         self.retain_file_name.pack(side=Tk.LEFT)
         self.retain_file_name.insert(0,"Drone_001")
 
+        # entry box start time
+        self.start_time_label = Tk.Label(self.__root, font=self.__set_font, text="start time:")
+        self.start_time_label.place(width=150,height=30,x=10, y=30)
+        self.entry_start_time = Tk.Entry(self.__root, bd=2, font=self.__set_font)
+        self.entry_start_time.place(width=120,height=30,x=150, y=30)
+        self.entry_start_time.insert(0,"00:00:00")
+        
+        # entry box end time
+        self.end_time_label = Tk.Label(self.__root, font=self.__set_font, text="end time:")
+        self.end_time_label.place(width=150,height=30,x=10, y=70)
+        self.entry_end_time = Tk.Entry(self.__root, bd=2, font=self.__set_font)
+        self.entry_end_time.place(width=120,height=30,x=150, y=70)
+        self.entry_end_time.insert(0,"00:00:00")
+
     def __del__(self):               
         #deconstructor
         self.shut_down_log("over")
 
     def load_json_file_path(self):
         if self.__check_json_file_already_load() == True:
-        #if self.__already_load == True:
-            #start or restart this process
             file_path = filedialog.askdirectory()     #獲取*.json檔案資料夾路徑
             if os.path.isdir(file_path):
                 self.pym.PY_LOG(False, 'D', self.__log_name, 'json file path:' + '%s' % file_path)
@@ -126,7 +137,10 @@ class tool_display():
     def run_retain_json(self):
         if self.__already_load == True:
             if self.retain_file_name.get() != '':
-                self.fm_process_queue.put('deal_with_json_files:'+ self.retain_file_name.get());
+                start_time = self.entry_start_time.get()
+                end_time = self.entry_end_time.get()
+                send_msg = 'deal_with_json_files:'+ self.retain_file_name.get() + '@t1'+ start_time + '@t2' + end_time
+                self.fm_process_queue.put(send_msg)
                 msg = self.td_queue.get()
                 if msg == 'can_exit:':
                     self.show_info_msg_on_toast("提醒", "執行成功,詳細請參閱 ./not_belong_here/result.excel")

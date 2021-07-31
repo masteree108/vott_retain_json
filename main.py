@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # class init
     pym = PYM.LOG(True)
-    pym.PY_LOG(False, 'D', py_name, 'start init')
+    pym.PY_LOG(False, 'D', py_name, '\n +++++++++++++++++++++++++++++++++ start init ++++++++++++++++++++++++++++++++++++')
 
     td = TD.tool_display(td_queue, RJF_process_queue)
     
