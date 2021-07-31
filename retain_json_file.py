@@ -1,0 +1,365 @@
+import os
+import sys
+import json
+import enum
+import threading
+import queue
+import numpy as np
+import shutil
+import operate_vott_id_json as OVIJ
+import log as PYM
+from tkinter import *
+from tkinter import messagebox
+import tkinter.font as font
+import cv2
+import pandas as pd
+from time import sleep
+# install module
+#pip install openpyxl
+
+class retain_json_file(threading.Thread):
+# private
+    __log_name = '< class retain_json_file>'
+    __ovij_list = []
+    __all_file_list = []
+    __all_json_file_list = []
+    __amount_of_ovij = 0
+    __amount_of_not_belong_here_ovij = 0
+    __amount_of_empty_file_ovij = 0
+    __file_path = ''
+    __empty_file_ovij_list = []
+    __not_belong_here_ovij_list = []
+    __video_path = ''
+    __not_belong_here_folder_path = '/not_belong_here/'
+    __vott_set_fps = 0
+    __CSM_exist = False
+    __retain_file_name = ''
+
+    def __check_json_file_name(self):
+        # if file name is not equal xxxx...xxx-asset.json,it will kick out to list
+        temp = []
+        for file_name in self.__all_file_list:
+            self.pym.PY_LOG(False, 'D', self.__log_name, "__check_file_name: " + file_name)
+            root, extension = os.path.splitext(file_name)
+            if extension == '.json':
+                if file_name.find("-asset.json")!=-1:
+                    temp.append(file_name)
+
+        self.pym.PY_LOG(False, 'D', self.__log_name, "all file checked ok(drop out those not .json files) ")
+        if len(temp) != 0: 
+            self.__all_file_list = temp.copy()
+            # print all filename in the list
+            for i in self.__all_file_list:
+                self.pym.PY_LOG(False, 'D', self.__log_name, i)
+            return 0
+        else:
+            return -1
+
+
+    def __list_all_file(self, path):
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'msg(file_path): ' + path)
+        self.__all_file_list = os.listdir(path)
+        amount_of_file = len(self.__all_file_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount_of_file:%d' % amount_of_file)
+        return self.__check_json_file_name()
+
+    def __create_ovij_list(self):
+        for i,jt in enumerate(self.__all_file_list):
+            root, extension = os.path.splitext(jt)
+            if extension == ".json":
+                self.__all_json_file_list.append(jt)
+                ovij = ''
+                ovij = OVIJ.operate_vott_id_json()
+                self.__ovij_list.append(ovij)
+
+    def __sort_ovij_list(self):
+        temp_no_sort = []
+        temp_ovij_list = []
+        for i in range(self.__amount_of_ovij):
+            temp_no_sort.append(self.__ovij_list[i].get_timestamp())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'timestamp without sort %s' % str(temp_no_sort[i]))
+        temp_sort = temp_no_sort.copy()
+        temp_sort.sort()
+
+        for i in range(self.__amount_of_ovij):
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'timestamp with sort %s' % str(temp_sort[i]))
+            
+        
+        find_index = np.array(temp_no_sort)
+
+        # sort ovij_list
+        for i, tps in enumerate(temp_sort):
+            index = np.argwhere(find_index == tps)
+            temp_ovij_list.append(self.__ovij_list[int(index)])
+
+        self.__ovij_list = []
+        self.__ovij_list = temp_ovij_list.copy()
+        for i in range(self.__amount_of_ovij):
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'ovij_list with sort %s' % str(self.__ovij_list[i].get_timestamp()))
+
+    def __judge_vott_set_fps(self):
+        pre_timestamp = self.__ovij_list[0].get_timestamp()
+        cur_timestamp = self.__ovij_list[1].get_timestamp()
+        vott_set_fps = 1 / (cur_timestamp - pre_timestamp)
+        vott_set_fps = round(vott_set_fps, 1) 
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'vott_set_fps %s' % str(vott_set_fps))
+        return vott_set_fps
+
+        
+    def __create_not_belong_here_folder(self):
+        if os.path.isdir(self.__not_belong_here_folder_path) != 0:
+            # folder existed
+            shutil.rmtree(self.__not_belong_here_folder_path)
+        os.makedirs(self.__not_belong_here_folder_path)
+
+
+    def __deal_with_json_file_path_command(self, msg):
+        self.__file_path = msg[15:]
+        if self.__list_all_file(self.__file_path) == 0:
+            self. __notify_tool_display_json_file_exist()
+            self.show_info_msg_on_toast(" 提醒", "載入josn完成,請按 run 繼續執行 ")
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'file_path:%s' % self.__file_path)
+        else:
+            self.__notify_tool_display_json_file_not_exist()
+            self.show_info_msg_on_toast("error", "此資料夾沒有 *.json files")
+            self.pym.PY_LOG(True, 'E', self.__log_name, 'There are no any *.json files')
+            self.shut_down_log("over")
+
+    def __find_timestamp_index_at_target_frame(self, index):
+        first_timestamp = self.__ovij_list[index].get_timestamp()
+        first_timestamp_sec = int(first_timestamp)
+        diff = first_timestamp - first_timestamp_sec
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'target timestamp diff:%s' % diff)
+        return index
+
+    def __notify_tool_display_json_file_exist(self):
+        msg = 'json_file_existed:'
+        self.td_queue.put(msg)
+   
+    def __notify_tool_display_json_file_not_exist(self):
+        msg = 'no_json_file:'
+        self.td_queue.put(msg)
+
+    def __notify_tool_display_to_exit_system(self):
+        msg = 'can_exit:'
+        self.td_queue.put(msg)
+
+    def __notify_tool_display_process_file_not_exist(self):
+        msg = 'file_not_exist:'
+        self.td_queue.put(msg)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'there no any files in the folder')
+
+    def __deal_with_file_list(self):
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'self.__file_path:%s' % self.__file_path)
+        
+        self.__create_ovij_list()
+        self.__amount_of_ovij = len(self.__ovij_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step1: %d' % self.__amount_of_ovij)
+        self.__amount_of_ovij = len(self.__all_json_file_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step2: %d' % self.__amount_of_ovij)
+
+        empty_all_json_file_list = []
+        empty_ovij_list = []
+        self.__empty_file_ovij_list = []
+        # read json data and fill into ovij_list[num]
+        for i in range(len(self.__all_json_file_list)):
+            root, extension = os.path.splitext(self.__file_path + '/' + self.__all_json_file_list[i])
+            if extension == '.json':
+                if self.__ovij_list[i].read_all_file_info(self.__file_path, self.__all_json_file_list[i]) == -1:
+                    empty_all_json_file_list.append(self.__all_json_file_list[i])
+                    empty_ovij_list.append(self.__ovij_list[i])
+
+        self.__not_belong_here_folder_path = self.__file_path + self.__not_belong_here_folder_path
+        self.__create_not_belong_here_folder()
+
+        # check if those .json file are empty or not correct data format just removing form ovij_list
+        for i,empty_ovij_name in enumerate(empty_ovij_list):
+            self.__ovij_list.remove(empty_ovij_list[i])
+            self.__empty_file_ovij_list.append(empty_ovij_list[i])
+
+        for i,empty_json_name in enumerate(empty_all_json_file_list):
+            self.__all_json_file_list.remove(empty_json_name)
+
+        self.__amount_of_empty_file_ovij = len(self.__empty_file_ovij_list) 
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of empty file ovij: %d' % self.__amount_of_empty_file_ovij)
+
+        self.__amount_of_ovij = len(self.__all_json_file_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step3: %d' % self.__amount_of_ovij)
+        self.__amount_of_ovij = len(self.__ovij_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step4: %d\n' % self.__amount_of_ovij)
+
+        # move jsons file that not belong here
+        self.__not_belong_here_ovij_list = []
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'retain_file_name:%s' % self.__retain_file_name)
+
+        remove_ovij_list = []
+        remove_all_json_file_list = []
+        for i,ovij in enumerate(self.__ovij_list):
+            try:
+                self.pym.PY_LOG(False, 'D', self.__log_name, 'index:%d' % i)
+                self.pym.PY_LOG(False, 'D', self.__log_name, 'ovij-asset_id:%s' % ovij.get_asset_id())
+                self.pym.PY_LOG(False, 'D', self.__log_name, 'ovij-path:%s' % ovij.get_asset_path())
+                file_name = ovij.get_asset_id()  + '-asset.json'
+                file_path = self.__file_path + '/' + file_name
+                self.pym.PY_LOG(False, 'D', self.__log_name, 'file_path:%s' % file_path)
+                root, extension = os.path.splitext(ovij.get_parent_name())
+                #self.pym.PY_LOG(False, 'D', self.__log_name, 'parent_name:%s' % ovij.get_parent_name())
+                self.pym.PY_LOG(False, 'D', self.__log_name, 'parent_name:%s without extension' % root)
+                if root.find(self.__retain_file_name) == -1:
+                    # save those file that not belong here for saving to excel
+                    self.__not_belong_here_ovij_list.append(ovij)
+                    shutil.move(file_path, self.__not_belong_here_folder_path)
+                    remove_ovij_list.append(ovij)
+                    remove_all_json_file_list.append(file_name)
+
+            except:
+                self.pym.PY_LOG(False, 'E', self.__log_name, 'this file cause tool happening error:%s' % ovij.get_asset_path())
+                shutil.move(file_path, self.__not_belong_here_folder_path)
+
+        self.__amount_of_ovij = len(self.__all_json_file_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step5: %s' % str(self.__amount_of_ovij))
+        self.__amount_of_ovij = len(self.__ovij_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step6: %s\n' % str(self.__amount_of_ovij))
+
+
+        # remove those ovij that are not belong in ovij_list
+        for i,remove_ovij in enumerate(remove_ovij_list):
+            self.__ovij_list.remove(remove_ovij)
+            
+        for i,remove_json_name in enumerate(remove_all_json_file_list):
+            self.__all_json_file_list.remove(remove_json_name)
+
+        self.__amount_of_not_belong_here_ovij = len(self.__not_belong_here_ovij_list) 
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of not belong here ovij: %d' % self.__amount_of_not_belong_here_ovij)
+        self.__amount_of_ovij = len(self.__all_json_file_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step7: %s' % str(self.__amount_of_ovij))
+        self.__amount_of_ovij = len(self.__ovij_list)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount of ovij-step8: %s\n' % str(self.__amount_of_ovij))
+
+        # sort ovij_list by timestamp
+        self.__sort_ovij_list()
+        
+        self.__save_result_to_excel()
+
+        return True
+
+    def __save_result_to_excel(self):
+                    
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'create excel file')
+        self.pym.PY_LOG(False, 'D', self.__log_name, '===== excel ovij_list: =====')
+        list_id = []
+        list_name = []
+        timestamp = []
+        for i,ovij in enumerate(self.__ovij_list):
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_id:%s' % ovij.get_asset_id())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_name:%s' % ovij.get_asset_name())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'timestamp:%s' % str(ovij.get_timestamp()))
+
+            list_id.append(ovij.get_asset_id()+'-asset.json')
+            list_name.append(ovij.get_asset_name())
+            timestamp.append(ovij.get_timestamp())
+        
+        retain_data = pd.DataFrame({'asset_id':list_id, 'asset_name':list_name,'timestamp':timestamp})
+
+        
+        self.pym.PY_LOG(False, 'D', self.__log_name, '===== excel not_belong_here_ovij_list: =====')
+        list_id = []
+        list_name = []
+        timestamp = []
+        for i,nbh in enumerate(self.__not_belong_here_ovij_list):
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_id:%s' % nbh.get_asset_id())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_name:%s' % nbh.get_asset_name())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'timestamp:%s' % str(nbh.get_timestamp()))
+
+            list_id.append(nbh.get_asset_id()+'-asset.json')
+            list_name.append(nbh.get_asset_name())
+            timestamp.append(nbh.get_timestamp())
+
+        nbh_data = pd.DataFrame({'asset_id':list_id, 'asset_name':list_name,'timestamp':timestamp})
+        
+        self.pym.PY_LOG(False, 'D', self.__log_name, '===== excel json content is empty file: =====')
+        list_id = []
+        list_name = []
+        for i,empty_file in enumerate(self.__empty_file_ovij_list):
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_id:%s' % empty_file.get_asset_id())
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'asset_name:%s' % empty_file.get_asset_name())
+
+            list_id.append(empty_file.get_asset_id()+'-asset.json')
+            list_name.append(empty_file.get_asset_name())
+
+        empty_data = pd.DataFrame({'asset_id':list_id, 'asset_name':list_name})
+
+        save_path = ''
+        filename = "result.xlsx"
+        save_path = self.__not_belong_here_folder_path + filename
+        writer = pd.ExcelWriter(save_path)
+        retain_data.to_excel(writer, index=False, sheet_name=self.__retain_file_name)
+        nbh_data.to_excel(writer, index=False, sheet_name="not_belong_here")
+        empty_data.to_excel(writer, index=False, sheet_name="empty_josn")
+        writer.save()
+                
+# public
+    def __init__(self, fm_process_que, td_que):
+        threading.Thread.__init__(self)
+        self.fm_process_queue = fm_process_que
+        self.td_queue = td_que
+        self.pym = PYM.LOG(True)
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'init')
+
+    def __del__(self):
+        #deconstructor
+        self.shut_down_log("over")
+
+    def FMP_main(self, msg):
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'receive msg from queue: ' + msg)
+        if msg[:15] == "json_file_path:":
+            self.__deal_with_json_file_path_command(msg)
+        elif msg.find('deal_with_json_files:')!=-1:
+            # make sure file_process folder is existed
+            retain_file_name_index = msg.find(':')
+            self.__retain_file_name = msg[retain_file_name_index+1:]
+            self.pym.PY_LOG(False, 'D', self.__log_name, 'retain_file_name:%s' % self.__retain_file_name)
+            if os.path.isdir(self.__file_path) != 0:
+                if self.__deal_with_file_list():
+                    self.__notify_tool_display_to_exit_system()
+                    self.pym.PY_LOG(False, 'D', self.__log_name, '!!---FINISHED THIS ROUND,WAIT FOR NEXT ROUND---!!\n\n\n\n\n')
+            else:
+                self.__notify_tool_display_process_file_not_exist()
+                self.pym.PY_LOG(True, 'E', self.__log_name, 'There are no file_process folder!!')
+                self.shut_down_log("over")
+
+    def run(self):
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'run')
+        while True:
+            msg = self.fm_process_queue.get()
+            self.FMP_main(msg)
+            if msg == 'over':
+                break
+        self.shut_down_log("RJF_rpocess_over")
+
+    def shut_down_log(self, msg):
+        self.pym.PY_LOG(False, 'D', self.__log_name, 'amount_of_ovij:%d' % self.__amount_of_ovij)
+        self.pym.PY_LOG(True, 'D', self.__log_name, msg)
+
+        # delete all ovij_list's pym process
+        if self.__amount_of_ovij != 0:
+            for i,ovij in enumerate(self.__ovij_list):
+                ovij.shut_down_log("%d pym over" %i) 
+
+        if self.__amount_of_not_belong_here_ovij != 0:
+            for i,ovij in enumerate(self.__not_belong_here_ovij_list):
+                ovij.shut_down_log("%d pym over" %i) 
+
+        if self.__amount_of_empty_file_ovij != 0:
+            for i,ovij in enumerate(self.__empty_file_ovij_list):
+                ovij.shut_down_log("%d pym over" %i) 
+
+
+    def show_error_msg_on_toast(self, title, msg):
+        messagebox.showerror(title, msg)
+
+    def show_info_msg_on_toast(self, title, msg):
+        messagebox.showinfo(title, msg)
+
+
+
