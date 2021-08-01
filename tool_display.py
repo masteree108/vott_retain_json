@@ -145,6 +145,10 @@ class tool_display():
                 if msg == 'can_exit:':
                     self.show_info_msg_on_toast("提醒", "執行成功,詳細請參閱 ./not_belong_here/result.excel")
                     self.system_quit()
+                elif msg == 'no_retain_name_exit:':
+                    self.show_info_msg_on_toast("錯誤", "搜尋此資料夾*.json file 無 %s 資訊" % self.retain_file_name.get())
+                    self.system_quit()
+
             else:
                 self.show_info_msg_on_toast("提醒", "請填入json資料影片名稱,ex:Drone_001")
 

@@ -162,6 +162,10 @@ class retain_json_file(threading.Thread):
         msg = 'can_exit:'
         self.td_queue.put(msg)
 
+    def __notify_tool_display_no_retain_filename_exit_system(self):
+        msg = 'no_retain_name_exit:'
+        self.td_queue.put(msg)
+
     def __notify_tool_display_process_file_not_exist(self):
         msg = 'file_not_exist:'
         self.td_queue.put(msg)
@@ -308,25 +312,26 @@ class retain_json_file(threading.Thread):
         self.__deal_with_empty_timestamp_files()
         
         self.__deal_with_other_source_files()
+        if self.__amount_of_ovij != 0:
+            # sort ovij_list by timestamp
+            self.__sort_ovij_list()
 
-        # sort ovij_list by timestamp
-        self.__sort_ovij_list()
-
-        time_diff = self.__start_time - self.__end_time
-        if time_diff != 0:
-            # run bleow function must after finished ovij sort
-            pre_timestamp = self.__ovij_list[0].get_timestamp()
-            cur_timestamp = self.__ovij_list[1].get_timestamp()
-            fps = self.fj.judge_vott_set_fps(pre_timestamp, cur_timestamp)
-            if self.fj.check_support_fps(fps) == True:
-                self.pym.PY_LOG(False, 'D', self.__log_name, 'fps support')
-                self.__deal_with_not_specify_timestamp_files(fps)
-            else:
-                self.pym.PY_LOG(False, 'E', self.__log_name, 'fps:%d not support on this tool' % fps)
-                
-        self.__save_result_to_excel()
-
-        return True
+            time_diff = self.__start_time - self.__end_time
+            if time_diff != 0:
+                # run bleow function must after finished ovij sort
+                pre_timestamp = self.__ovij_list[0].get_timestamp()
+                cur_timestamp = self.__ovij_list[1].get_timestamp()
+                fps = self.fj.judge_vott_set_fps(pre_timestamp, cur_timestamp)
+                if self.fj.check_support_fps(fps) == True:
+                    self.pym.PY_LOG(False, 'D', self.__log_name, 'fps support')
+                    self.__deal_with_not_specify_timestamp_files(fps)
+                else:
+                    self.pym.PY_LOG(False, 'E', self.__log_name, 'fps:%d not support on this tool' % fps)
+                    
+            self.__save_result_to_excel()
+            return True
+        else:
+            return False
 
     def __save_result_to_excel(self):
                     
@@ -461,7 +466,11 @@ class retain_json_file(threading.Thread):
             if os.path.isdir(self.__file_path) != 0:
                 if self.__deal_with_file_list():
                     self.__notify_tool_display_to_exit_system()
-                    self.pym.PY_LOG(False, 'D', self.__log_name, '!!---FINISHED THIS ROUND,WAIT FOR NEXT ROUND---!!\n\n\n\n\n')
+                    self.pym.PY_LOG(False, 'D', self.__log_name, '!!---FINISHED THIS ROUND---!!\n\n\n\n\n')
+                else:
+                    self.__notify_tool_display_no_retain_filename_exit_system()
+                    self.pym.PY_LOG(False, 'E', self.__log_name, '!!---All *.json file content without %s---!!\n\n\n\n\n' % self.__retain_file_name)
+
             else:
                 self.__notify_tool_display_process_file_not_exist()
                 self.pym.PY_LOG(True, 'E', self.__log_name, 'There are no file_process folder!!')
