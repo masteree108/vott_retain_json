@@ -7,6 +7,10 @@ disqus: hackmd
 ===
 
 [TOC]
+## 文件版本
+```gherkin=
+目前版本:v0.0.2 更新6. 製作 vott_retain_json.exe方法
+```
 ## 1. 工具介紹
 由於 vott target 資料夾檔名複雜,若想挑出使用者指定的秒數或挑出不要的檔案(如別專案的檔案混入其中),可以使用此工具挑出指定的.json檔案
 ```gherkin=
@@ -126,8 +130,12 @@ python main.py
 若要製作 vott_retain_json.exe ,首先開啟 Anaconda Promot(anaconda3)並切換環境
 ```gherkin=
 conda activate your_env
+製作執行時 without console 版本(建議使用)
+
+製作執行時 with console 版本(debug使用)
 pyinstaller -F ./main.py
 ```
+
 製作完成後,將產生的./dist/main.exe 複製到別處並更名,最後刪除不必要的暫存檔
 :::info
 注意,以下的指令必須在 WSL 的 ubuntu 底下執行
@@ -141,6 +149,9 @@ cp ./dist/main.exe ./ && mv main.exe vott_retain_json.exe && rm -rf dist && rm -
 ```gherkin=
 目前版本:v0.0.1
 ```
-[工具下載連結](https://drive.google.com/drive/folders/1bCgvqK7sGGL9RR58UUg3QbaAFUUrRVdv?usp=sharing)
+建議下載 without_consloe 版本
+[工具下載連結](https://drive.google.com/drive/folders/1hmr2rqgRdhf_pYwlFRU22UXyAps83Gkw?usp=sharing)
+
+![](https://i.imgur.com/O9WSJAJ.png)
 
 ###### tags: `tool`, `Python`
